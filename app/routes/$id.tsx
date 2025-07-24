@@ -2,7 +2,7 @@ import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
 } from "@remix-run/cloudflare";
-import { useLoaderData, Form } from "@remix-run/react";
+import { useLoaderData, Form, useFetcher } from "@remix-run/react";
 import { TodoManager } from "~/to-do-manager";
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
@@ -60,6 +60,7 @@ const COLUMNS = [
 
 export default function () {
   const { todosByColumn } = useLoaderData<typeof loader>();
+  const moveFetcher = useFetcher();
 
   // Helper to flatten todos for Draggable
   const getTodos = (colKey: string) => todosByColumn[colKey] || [];
@@ -69,24 +70,14 @@ export default function () {
     if (!result.destination) return;
     const { draggableId, destination, source } = result;
     if (destination.droppableId !== source.droppableId) {
-      // Submit a form to move the task
-      const form = document.createElement('form');
-      form.method = 'post';
-      form.style.display = 'none';
-      const idInput = document.createElement('input');
-      idInput.name = 'id';
-      idInput.value = draggableId;
-      form.appendChild(idInput);
-      const columnInput = document.createElement('input');
-      columnInput.name = 'column';
-      columnInput.value = destination.droppableId;
-      form.appendChild(columnInput);
-      const intentInput = document.createElement('input');
-      intentInput.name = 'intent';
-      intentInput.value = 'move';
-      form.appendChild(intentInput);
-      document.body.appendChild(form);
-      form.submit();
+      moveFetcher.submit(
+        {
+          id: draggableId,
+          column: destination.droppableId,
+          intent: "move",
+        },
+        { method: "post" }
+      );
     }
   }
 
@@ -130,30 +121,32 @@ export default function () {
                             <li
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              {...provided.dragHandleProps}
                               className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800"
                               style={{ ...provided.draggableProps.style, boxShadow: snapshot.isDragging ? '0 2px 8px rgba(0,0,0,0.15)' : undefined }}
                             >
+                              {/* Drag handle (≡ icon) */}
+                              <span
+                                {...provided.dragHandleProps}
+                                className="cursor-grab text-gray-400 hover:text-gray-600 px-2 text-xl select-none"
+                                aria-label="Drag to move"
+                              >
+                                ≡
+                              </span>
+                              {/* Checkbox for completion */}
                               <Form method="post" className="flex items-center gap-2 flex-1">
                                 <input type="hidden" name="id" value={todo.id} />
-                                <button
-                                  type="submit"
-                                  name="intent"
-                                  value="toggle"
-                                  className="p-0 m-0 bg-transparent border-none"
+                                <input
+                                  type="checkbox"
+                                  name="completed"
+                                  checked={todo.completed}
+                                  onChange={e => {
+                                    e.currentTarget.form.requestSubmit();
+                                  }}
+                                  className="accent-blue-500 h-4 w-4 mr-2"
                                   aria-label="Mark complete"
-                                  style={{ display: 'flex', alignItems: 'center' }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    name="completed"
-                                    checked={todo.completed}
-                                    readOnly
-                                    className="accent-blue-500 h-4 w-4 mr-2"
-                                    onClick={e => e.stopPropagation()}
-                                  />
-                                  <span className={todo.completed ? "line-through text-gray-400" : ""}>{todo.text}</span>
-                                </button>
+                                />
+                                <span className={todo.completed ? "line-through text-gray-400" : ""}>{todo.text}</span>
+                                <input type="hidden" name="intent" value="toggle" />
                               </Form>
                               <Form method="post" className="ml-auto">
                                 <input type="hidden" name="id" value={todo.id} />
