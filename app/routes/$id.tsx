@@ -4,6 +4,7 @@ import {
 } from "@remix-run/cloudflare";
 import { useLoaderData, Form } from "@remix-run/react";
 import { TodoManager } from "~/to-do-manager";
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
 export const loader = async ({ params, context }: LoaderFunctionArgs) => {
   const todoManager = new TodoManager(
@@ -60,6 +61,35 @@ const COLUMNS = [
 export default function () {
   const { todosByColumn } = useLoaderData<typeof loader>();
 
+  // Helper to flatten todos for Draggable
+  const getTodos = (colKey: string) => todosByColumn[colKey] || [];
+
+  // Handler for drag end
+  function handleDragEnd(result: DropResult) {
+    if (!result.destination) return;
+    const { draggableId, destination, source } = result;
+    if (destination.droppableId !== source.droppableId) {
+      // Submit a form to move the task
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.style.display = 'none';
+      const idInput = document.createElement('input');
+      idInput.name = 'id';
+      idInput.value = draggableId;
+      form.appendChild(idInput);
+      const columnInput = document.createElement('input');
+      columnInput.name = 'column';
+      columnInput.value = destination.droppableId;
+      form.appendChild(columnInput);
+      const intentInput = document.createElement('input');
+      intentInput.name = 'intent';
+      intentInput.value = 'move';
+      form.appendChild(intentInput);
+      document.body.appendChild(form);
+      form.submit();
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4">
       <div className="max-w-5xl mx-auto">
@@ -82,70 +112,74 @@ export default function () {
             Add
           </button>
         </Form>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {COLUMNS.map((col) => (
-            <div key={col.key} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-              <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">{col.label}</h2>
-              <ul className="space-y-2">
-                {(todosByColumn[col.key] || []).map((todo) => (
-                  <li key={todo.id} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <Form method="post" className="flex items-center gap-2 flex-1">
-                      <input type="hidden" name="id" value={todo.id} />
-                      <input
-                        type="checkbox"
-                        name="completed"
-                        checked={todo.completed}
-                        onChange={() => {}}
-                        onClick={e => {
-                          e.currentTarget.form?.requestSubmit();
-                        }}
-                        className="accent-blue-500 h-4 w-4"
-                        aria-label="Mark complete"
-                      />
-                      <button
-                        type="submit"
-                        name="intent"
-                        value="toggle"
-                        className="flex-1 text-left"
-                        style={{ background: "none", border: "none", padding: 0 }}
-                        tabIndex={-1}
-                      >
-                        <span className={todo.completed ? "line-through text-gray-400" : ""}>{todo.text}</span>
-                      </button>
-                    </Form>
-                    <Form method="post">
-                      <input type="hidden" name="id" value={todo.id} />
-                      <button
-                        type="submit"
-                        name="intent"
-                        value="delete"
-                        className="text-red-500 hover:text-red-700"
-                        aria-label="Delete"
-                      >
-                        Delete
-                      </button>
-                    </Form>
-                    <Form method="post">
-                      <input type="hidden" name="id" value={todo.id} />
-                      <select
-                        name="column"
-                        defaultValue={todo.column}
-                        onChange={e => e.currentTarget.form?.requestSubmit()}
-                        className="ml-2 rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900 text-sm"
-                        aria-label="Move to column"
-                      >
-                        {COLUMNS.map(opt => (
-                          <option key={opt.key} value={opt.key}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <input type="hidden" name="intent" value="move" />
-                    </Form>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {COLUMNS.map((col) => (
+              <Droppable droppableId={col.key} key={col.key}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 min-h-[200px]"
+                  >
+                    <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">{col.label}</h2>
+                    <ul className="space-y-2">
+                      {getTodos(col.key).map((todo, idx) => (
+                        <Draggable draggableId={todo.id} index={idx} key={todo.id}>
+                          {(provided, snapshot) => (
+                            <li
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800"
+                              style={{ ...provided.draggableProps.style, boxShadow: snapshot.isDragging ? '0 2px 8px rgba(0,0,0,0.15)' : undefined }}
+                            >
+                              <Form method="post" className="flex items-center gap-2 flex-1">
+                                <input type="hidden" name="id" value={todo.id} />
+                                <button
+                                  type="submit"
+                                  name="intent"
+                                  value="toggle"
+                                  className="p-0 m-0 bg-transparent border-none"
+                                  aria-label="Mark complete"
+                                  style={{ display: 'flex', alignItems: 'center' }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    name="completed"
+                                    checked={todo.completed}
+                                    readOnly
+                                    className="accent-blue-500 h-4 w-4 mr-2"
+                                    onClick={e => e.stopPropagation()}
+                                  />
+                                  <span className={todo.completed ? "line-through text-gray-400" : ""}>{todo.text}</span>
+                                </button>
+                              </Form>
+                              <Form method="post" className="ml-auto">
+                                <input type="hidden" name="id" value={todo.id} />
+                                <button
+                                  type="submit"
+                                  name="intent"
+                                  value="delete"
+                                  className="text-red-500 hover:text-red-700 text-lg font-bold px-2"
+                                  aria-label="Delete"
+                                  style={{ lineHeight: 1 }}
+                                >
+                                  ×
+                                </button>
+                              </Form>
+                            </li>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </ul>
+                  </div>
+                )}
+              </Droppable>
+            ))}
+          </div>
+        </DragDropContext>
       </div>
     </div>
   );
