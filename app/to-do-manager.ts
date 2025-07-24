@@ -3,6 +3,7 @@ interface Todo {
   text: string;
   completed: boolean;
   createdAt: number;
+  column: "todo" | "in progress" | "in review";
 }
 
 /**
@@ -37,6 +38,19 @@ export class TodoManager {
   }
 
   /**
+   * Retrieves todos grouped by column
+   * @returns Promise containing an object with columns as keys and arrays of Todo items as values
+   */
+  async listByColumn(): Promise<Record<string, Todo[]>> {
+    const todos = await this.list();
+    return todos.reduce((acc, todo) => {
+      if (!acc[todo.column]) acc[todo.column] = [];
+      acc[todo.column].push(todo);
+      return acc;
+    }, {} as Record<string, Todo[]>);
+  }
+
+  /**
    * Creates a new todo item
    * @param text - The text content of the todo item
    * @returns Promise containing the newly created Todo item
@@ -47,6 +61,7 @@ export class TodoManager {
       text,
       completed: false,
       createdAt: Date.now(),
+      column: "todo",
     };
     const todos = await this.list();
     todos.push(newTodo);
@@ -69,6 +84,26 @@ export class TodoManager {
       throw new Error(`Todo with id ${id} not found`);
     }
     todos[todoIndex].completed = !todos[todoIndex].completed;
+    await this.kv.put(this.todosKey, JSON.stringify(todos), {
+      expirationTtl: 300,
+    });
+    return todos[todoIndex];
+  }
+
+  /**
+   * Moves a todo item to a different column
+   * @param id - The unique identifier of the todo item to move
+   * @param column - The target column
+   * @returns Promise containing the updated Todo item
+   * @throws Error if the todo item with the specified ID is not found
+   */
+  async moveToColumn(id: string, column: "todo" | "in progress" | "in review"): Promise<Todo> {
+    const todos = await this.list();
+    const todoIndex = todos.findIndex((todo) => todo.id === id);
+    if (todoIndex === -1) {
+      throw new Error(`Todo with id ${id} not found`);
+    }
+    todos[todoIndex].column = column;
     await this.kv.put(this.todosKey, JSON.stringify(todos), {
       expirationTtl: 300,
     });
