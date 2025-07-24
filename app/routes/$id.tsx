@@ -5,6 +5,7 @@ import {
 import { useLoaderData, Form, useFetcher } from "@remix-run/react";
 import { TodoManager } from "~/to-do-manager";
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+import { CheckIcon } from '@heroicons/react/24/solid'; // You may need to install @heroicons/react or use an inline SVG
 
 export const loader = async ({ params, context }: LoaderFunctionArgs) => {
   const todoManager = new TodoManager(
@@ -111,7 +112,7 @@ export default function () {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 min-h-[200px]"
+                    className={`bg-white dark:bg-gray-800 rounded-lg shadow p-4 min-h-[200px] transition-colors duration-200 ${snapshot.isDraggingOver ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                   >
                     <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">{col.label}</h2>
                     <ul className="space-y-2">
@@ -121,7 +122,7 @@ export default function () {
                             <li
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800"
+                              className={`flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 transition-shadow duration-200 ${snapshot.isDragging ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900' : ''}`}
                               style={{ ...provided.draggableProps.style, boxShadow: snapshot.isDragging ? '0 2px 8px rgba(0,0,0,0.15)' : undefined }}
                             >
                               {/* Drag handle (≡ icon) */}
@@ -132,23 +133,26 @@ export default function () {
                               >
                                 ≡
                               </span>
-                              {/* Checkbox for completion */}
-                              <Form method="post" className="flex items-center gap-2 flex-1">
+                              {/* Task text */}
+                              <span className={`flex-1 ${todo.completed ? "line-through text-gray-400" : ""}`}>{todo.text}</span>
+                              {/* Complete button (checkmark icon) */}
+                              <Form method="post">
                                 <input type="hidden" name="id" value={todo.id} />
-                                <input
-                                  type="checkbox"
-                                  name="completed"
-                                  checked={todo.completed}
-                                  onChange={e => {
-                                    e.currentTarget.form.requestSubmit();
-                                  }}
-                                  className="accent-blue-500 h-4 w-4 mr-2"
-                                  aria-label="Mark complete"
-                                />
-                                <span className={todo.completed ? "line-through text-gray-400" : ""}>{todo.text}</span>
                                 <input type="hidden" name="intent" value="toggle" />
+                                <button
+                                  type="submit"
+                                  className={`text-green-500 hover:text-green-700 p-1 rounded ${todo.completed ? 'bg-green-100 dark:bg-green-900' : ''}`}
+                                  aria-label="Mark complete"
+                                  disabled={todo.completed}
+                                >
+                                  {/* Inline SVG for checkmark if heroicons not available */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                  </svg>
+                                </button>
                               </Form>
-                              <Form method="post" className="ml-auto">
+                              {/* Delete button (X) */}
+                              <Form method="post" className="ml-1">
                                 <input type="hidden" name="id" value={todo.id} />
                                 <button
                                   type="submit"
